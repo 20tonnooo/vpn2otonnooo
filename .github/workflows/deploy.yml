@@ -16,13 +16,7 @@ jobs:
         with:
           submodules: 'true'
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-       - name: Install Android Qt
+      - name: Install Android Qt
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.7.3'
@@ -45,5 +39,25 @@ jobs:
       - name: Inject Prebuilt Core and Assemble APK
         shell: bash
         run: |
-          # Создаем структуру папок, которую ожидает увидеть Amnezia
           mkdir -p deploy/build/client/android-build
+          curl -L -o deploy/build/client/android-build/libamnezia-wg.so https://github.com || true
+          
+          cmake -B build_dir -S . \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DANDROID_ABI=arm64-v8a \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_HOME/ndk/25.2.9519653/build/cmake/android.toolchain.cmake \
+            -DANDROID_PLATFORM=android-33 \
+            -DCMAKE_PREFIX_PATH=${{ runner.temp }}/Qt/6.7.3/android_arm64_v8a \
+            -DENABLE_CONAN=OFF
+            
+          cmake --build build_dir --target amnezia
+          
+          mkdir -p output_apk
+          find build_dir -name "*.apk" -exec cp {} output_apk/ \;
+
+      - name: Save APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: My-Amnezia-APK
+          path: output_apk/
+          retention-days: 7
