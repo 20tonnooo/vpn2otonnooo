@@ -866,29 +866,22 @@ jobs:
       with:
         packages: "platforms;android-28 ndk;27.0.11718014"
  
-    - name: 'Setup python'
-      uses: actions/setup-python@v6
-      with:
-        python-version: '3.11'
- 
-    - name: 'Install conan'
-      run: |
-        pip install "conan==2.28.0"
-        conan profile detect --force
- 
-    - name: 'Build project'
-      env:
-        QT_INSTALL_DIR: ${{ runner.temp }}
-        QT_ANDROID_KEYSTORE_PATH: ""
-        QT_ANDROID_KEYSTORE_ALIAS: ""
-        QT_ANDROID_KEYSTORE_STORE_PASS: ""
-        CONAN_LOGIN_USERNAME: ""
+    - name: 'Build project via CMake'
       shell: bash
       run: |
-        deploy/build.sh -t android --abi arm64-v8a
-        
+        # Конфигурируем сборку напрямую через CMake в обход Conan
+        cmake -B build_dir -S . \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DANDROID_ABI=arm64-v8a \
+          -DCMAKE_PREFIX_PATH=${{ runner.temp }}/Qt/6.7.3/android_arm64_v8a \
+          -DCMAKE_TOOLCHAIN_FILE=${{ androidSDK }}/ndk/27.0.11718014/build/cmake/android.toolchain.cmake
+          
+        # Запускаем компиляцию
+        cmake --build build_dir --target amnezia
+ 
+        # Собираем получившиеся APK файлы в одну папку
         mkdir -p output_apk
-        find deploy/build -name "*.apk" -exec cp {} output_apk/ \;
+        find build_dir -name "*.apk" -exec cp {} output_apk/ \;
  
     - name: 'Upload Compiled Android Files'
       uses: actions/upload-artifact@v4
@@ -910,7 +903,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
  
       - name: Add PR link to build summary
-        if: ${{ fromJSON(steps.pull_request.outputs.data)[0].number != '' }}
+        if: ${{ fromJSON(steps.pull_request.outputs.data).number != '' }}
         run: | 
           echo "Pull request:" >> $GITHUB_STEP_SUMMARY
-          echo "[[#${{ fromJSON(steps.pull_request.outputs.data)[0].number }}] ${{ fromJSON(steps.pull_request.outputs.data)[0].title }}](${{ fromJSON(steps.pull_request.outputs.data)[0].html_url }})" >> $GITHUB_STEP_SUMMARY
+          echo "[[#${{ fromJSON(steps.pull_request.outputs.data).number }}] ${{ fromJSON(steps.pull_request.outputs.data).title }}](${{ fromJSON(steps.pull_request.outputs.data).html_url }})" >> $GITHUB_STEP_SUMMARY
