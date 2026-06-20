@@ -16,48 +16,32 @@ jobs:
         with:
           submodules: 'true'
 
-      - name: Install Android Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: '6.7.3'
-          host: 'linux'
-          target: 'android'
-          arch: 'android_arm64_v8a'
-          dir: ${{ runner.temp }}
-
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Install NDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: "platforms;android-33 ndk;25.2.9519653"
+          packages: "platforms;android-33 build-tools;33.0.2"
 
-      - name: Inject Prebuilt Core and Assemble APK
-        shell: bash
+      - name: Assemble Unsigned APK via Gradle
         run: |
-          mkdir -p deploy/build/client/android-build
-          curl -L -o deploy/build/client/android-build/libamnezia-wg.so https://github.com || true
+          # Заходим напрямую в папку Android-клиента, минуя капризный CMake и Conan
+          cd client/android || cd android || cd platforms/android || true
           
-          cmake -B build_dir -S . \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DANDROID_ABI=arm64-v8a \
-            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_HOME/ndk/25.2.9519653/build/cmake/android.toolchain.cmake \
-            -DANDROID_PLATFORM=android-33 \
-            -DCMAKE_PREFIX_PATH=${{ runner.temp }}/Qt/6.7.3/android_arm64_v8a \
-            -DENABLE_CONAN=OFF
-            
-          cmake --build build_dir --target amnezia
+          # Даем права на запуск стандартному сборщику Google
+          chmod +x gradlew || true
           
-          mkdir -p output_apk
-          find build_dir -name "*.apk" -exec cp {} output_apk/ \;
+          # Запускаем сборку обычного отладочного APK без проверок подписи
+          ./gradlew assembleDebug --no-daemon
 
       - name: Save APK
         uses: actions/upload-artifact@v4
         with:
           name: My-Amnezia-APK
-          path: output_apk/
+          path: |
+            **/*.apk
           retention-days: 7
