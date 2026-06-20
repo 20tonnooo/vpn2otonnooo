@@ -803,7 +803,7 @@ jobs:
         py7zrversion: '==0.22.*'
         extra: '--base ${{ env.QT_MIRROR }}'
 
-    - name: 'Install android_arm64_v8a Qt'
+     - name: 'Install android_arm64_v8a Qt'
       uses: jurplel/install-qt-action@v4
       with:
         version: ${{ env.QT_VERSION }}
@@ -814,33 +814,55 @@ jobs:
         dir: ${{ runner.temp }}
         py7zrversion: '==0.22.*'
         extra: '--base ${{ env.QT_MIRROR }}'
-
+ 
     - name: 'Setup Java'
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
-
+ 
     - name: 'Setup Android SDK'
       uses: android-actions/setup-android@v4
       with:
         packages: "platforms;${{ env.ANDROID_PLATFORM }} ndk;${{ env.NDK_VERSION }}"
-
-    - name: 'Setup python'
-      uses: actions/setup-python@v6
-      with:
-        python-version: 3.14
-
-    - name: 'Install conan'
-      run: pip install "conan==2.28.0"
-
-    - name: 'Setup python'
-      uses: actions/setup-python@v6
-      with:
-        python-version: 3.14
  
+    - name: 'Setup python'
+      uses: actions/setup-python@v6
+      with:
+        python-version: 3.11 # Понизили до 3.11 для идеальной совместимости с Conan 2
+
     - name: 'Install conan'
-      run: pip install "conan==2.28.0"
+      run: |
+        pip install "conan==2.28.0"
+        # Создаем дефолтный профиль conan, чтобы он не лез в сеть за чужими настройками
+        conan profile detect --force
+
+    - name: 'Build project'
+      env:
+        QT_INSTALL_DIR: ${{ runner.temp }}
+        QT_ANDROID_KEYSTORE_PATH: ""
+        QT_ANDROID_KEYSTORE_ALIAS: ""
+        QT_ANDROID_KEYSTORE_STORE_PASS: ""
+        CONAN_LOGIN_USERNAME: "" # Очищаем логин, чтобы он не просил авторизацию
+      shell: bash
+      run: |
+        # Запускаем родной скрипт Amnezia, но БЕЗ флага подписи (--sign)
+        # Он сам соберет все зависимости локально через conan, не пытаясь загрузить их в сеть
+        deploy/build.sh -t android --aab
+ 
+        VERSION=$(grep CMAKE_PROJECT_VERSION:STATIC deploy/build/CMakeCache.txt | cut -d= -f2 || echo "debug")
+ 
+        # Проверяем, где создался APK, и переименовываем его без падения скрипта
+        mkdir -p output_apk
+        find deploy/build -name "*.apk" -exec cp {} output_apk/ \;
+        find deploy/build -name "*.aab" -exec cp {} output_apk/ \;
+
+    - name: 'Upload Compiled Android Files'
+      uses: actions/upload-artifact@v4
+      with:
+        name: AmneziaVPN-Android-Build
+        path: output_apk/
+        retention-days: 7
 
   Extra:
     runs-on: ubuntu-latest
