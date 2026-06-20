@@ -36,27 +36,27 @@ jobs:
         with:
           packages: "platforms;android-33 ndk;25.2.9519653"
 
-      - name: Setup python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install conan
-        run: |
-          pip install "conan==2.28.0"
-          conan profile detect --force
-          # УДАЛЯЕМ все удаленные репозитории Amnezia, чтобы conan работал только локально
-          conan remote list | awk '{print $1}' | xargs -I {} conan remote remove {} || true
-
-      - name: Compile Application
+      - name: Compile Application via Pure CMake
         shell: bash
         run: |
-          chmod +x deploy/build.sh
-          # Запускаем родной скрипт сборки без подписи ключами
-          deploy/build.sh -t android --abi arm64-v8a
+          export CONAN_DISABLE_CHECK_COMPILER=1
           
+          # Настраиваем сборку стандартными средствами Android NDK без участия Conan
+          cmake -B build_dir -S . \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DANDROID_ABI=arm64-v8a \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_HOME/ndk/25.2.9519653/build/cmake/android.toolchain.cmake \
+            -DANDROID_PLATFORM=android-33 \
+            -DCMAKE_PREFIX_PATH=${{ runner.temp }}/Qt/6.7.3/android_arm64_v8a \
+            -DENABLE_CONAN=OFF \
+            -DUSE_CONAN=OFF
+            
+          # Запускаем компиляцию самого приложения amnezia
+          cmake --build build_dir --target amnezia --parallel $(nproc)
+          
+          # Забираем получившийся готовый APK
           mkdir -p output_apk
-          find deploy/build -name "*.apk" -exec cp {} output_apk/ \;
+          find build_dir -name "*.apk" -exec cp {} output_apk/ \;
 
       - name: Save APK
         uses: actions/upload-artifact@v4
