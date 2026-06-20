@@ -840,70 +840,44 @@ jobs:
     Build-Android:
     runs-on: ubuntu-latest
     steps:
-    - name: 'Get sources'
-      uses: actions/checkout@v4
-      with:
-        submodules: 'true'
- 
-    - name: 'Install android_arm64_v8a Qt'
-      uses: jurplel/install-qt-action@v4
-      with:
-        version: '6.7.3'
-        host: 'linux'
-        target: 'android'
-        arch: 'android_arm64_v8a'
-        modules: 'qtremoteobjects qt5compat qtimageformats qtshadertools'
-        dir: ${{ runner.temp }}
- 
-    - name: 'Setup Java'
-      uses: actions/setup-java@v4
-      with:
-        distribution: 'temurin'
-        java-version: '17'
- 
-    - name: 'Setup Android SDK'
-      uses: android-actions/setup-android@v4
-      with:
-        packages: "platforms;android-28 ndk;27.0.11718014"
- 
-    - name: 'Build project via CMake'
-      shell: bash
-      run: |
-        # Конфигурируем сборку напрямую через CMake в обход Conan
-        cmake -B build_dir -S . \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DANDROID_ABI=arm64-v8a \
-          -DCMAKE_PREFIX_PATH=${{ runner.temp }}/Qt/6.7.3/android_arm64_v8a \
-          -DCMAKE_TOOLCHAIN_FILE=${{ androidSDK }}/ndk/27.0.11718014/build/cmake/android.toolchain.cmake
-          
-        # Запускаем компиляцию
-        cmake --build build_dir --target amnezia
- 
-        # Собираем получившиеся APK файлы в одну папку
-        mkdir -p output_apk
-        find build_dir -name "*.apk" -exec cp {} output_apk/ \;
- 
-    - name: 'Upload Compiled Android Files'
-      uses: actions/upload-artifact@v4
-      with:
-        name: AmneziaVPN-Android-Build
-        path: output_apk/
-        retention-days: 7
-
-  Extra:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Search a corresponding PR
-        uses: octokit/request-action@v2.x
-        id: pull_request
+      - name: Get code
+        uses: actions/checkout@v4
         with:
-          route: GET /repos/${{ github.repository }}/pulls
-          head: ${{ github.repository_owner }}:${{ github.ref_name }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
- 
-      - name: Add PR link to build summary
-        if: ${{ fromJSON(steps.pull_request.outputs.data).number != '' }}
-        run: | 
-          echo "Pull request:" >> $GITHUB_STEP_SUMMARY
-          echo "[[#${{ fromJSON(steps.pull_request.outputs.data).number }}] ${{ fromJSON(steps.pull_request.outputs.data).title }}](${{ fromJSON(steps.pull_request.outputs.data).html_url }})" >> $GITHUB_STEP_SUMMARY
+          submodules: 'true'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Android Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.5.3'
+          host: 'linux'
+          target: 'android'
+          arch: 'android_arm64_v8a'
+          dir: ${{ runner.temp }}
+
+      - name: Install NDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platforms;android-33 ndk;25.2.9519653"
+
+      - name: Compile Application
+        shell: bash
+        run: |
+          cmake -B build_dir -S . \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DANDROID_ABI=arm64-v8a
+          cmake --build build_dir --target amnezia
+          mkdir -p output_apk
+          find build_dir -name "*.apk" -exec cp {} output_apk/ \;
+
+      - name: Save APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: My-Amnezia-APK
+          path: output_apk/
+          retention-days: 7
